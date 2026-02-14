@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glass Creator V4 - MultiLayer</title>
+    
+    <!-- Icons & Fonts -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Bebas+Neue&family=Cinzel:wght@400;700&family=Inter:wght@300;400;600;800&family=Montserrat:wght@100;400;900&family=Playfair+Display:ital,wght@0,400;1,400&family=Righteous&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+    <style>
+        :root {
+            --bg-black: #050505;
+            --panel-bg: rgba(20, 20, 20, 0.7);
+            --border: rgba(255, 255, 255, 0.08);
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.5);
+            --highlight: #ec4899;
+            --text-main: #ffffff;
+            --text-muted: #9ca3af;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; user-select: none; }
+
+        body {
+            background-color: var(--bg-black);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- UI: Layout --- */
+        .app-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- Left: Canvas Area --- */
+        .canvas-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Floating Header (Dimensions) */
+        .top-bar {
+            position: absolute;
+            top: 20px;
+            background: rgba(30, 30, 30, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            padding: 5px;
+            border-radius: 50px;
+            display: flex;
+            gap: 5px;
+            z-index: 50;
+        }
+        .icon-btn {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            transition: 0.2s;
+            display: grid;
+            place-items: center;
+        }
+        .icon-btn:hover, .icon-btn.active { background: rgba(255,255,255,0.1); color: white; }
+
+        /* The Canvas */
+        #art-canvas {
+            width: 500px;
+            height: 500px;
+            position: relative;
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 0 100px rgba(0,0,0,0.8);
+            overflow: hidden;
+            transition: width 0.3s, height 0.3s;
+        }
+
+        /* Layers inside Canvas */
+        .bg-overlay {
+            position: absolute; inset: 0; pointer-events: none; z-index: 1;
+        }
+        .frame-layer {
+            position: absolute; inset: 0; pointer-events: none; z-index: 99;
+            border: 0px solid white; transition: 0.2s;
+        }
+
+        /* Draggable Text Item */
+        .text-layer {
+            position: absolute;
+            /* Center default */
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%); 
+            min-width: 50px;
+            text-align: center;
+            cursor: grab;
+            z-index: 10;
+            padding: 10px;
+            border: 1px dashed transparent; /* Hidden by default */
+            white-space: pre-wrap;
+        }
+        
+        .text-layer.selected {
+            border: 1px dashed var(--accent);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        /* Glass Effect applied to text layer */
+        .text-layer.glass-mode {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        /* Override border for selection if glass is active */
+        .text-layer.glass-mode.selected {
+            border: 1px solid var(--accent);
+        }
+
+        /* --- Right: Controls Sidebar --- */
+        .sidebar {
+            width: 380px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(30px);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        
+        /* Sidebar Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn.active { color: white; border-bottom-color: var(--accent); background: rgba(255,255,255,0.02); }
+
+        /* Panel Content */
+        .panel-content { display: none; padding: 20px; animation: fadeIn 0.3s; }
+        .panel-content.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Control UI */
+        .control-group { margin-bottom: 25px; }
+        .label-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        
+        input[type="range"] { width: 100%; accent-color: var(--accent); height: 4px; background: #333; border-radius: 2px; appearance: none; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; background: white; border-radius: 50%; cursor: pointer; }
+
+        textarea, input[type="text"] {
+            width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--border);
+            padding: 10px; border-radius: 8px; color: white; outline: none; resize: vertical; margin-bottom: 10px;
+        }
+        
+        /* Grid Buttons */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        
+        .btn-option {
+            background: rgba(255,255,255,0.05); border: 1px solid transparent;
+            padding: 8px; border-radius: 6px; color: #ccc; font-size: 11px; cursor: pointer; text-align: center;
+        }
+        .btn-option:hover { background: rgba(255,255,255,0.1); }
+        .btn-option.active { background: var(--accent); color: white; box-shadow: 0 4px 12px var(--accent-glow); }
+
+        /* Gradient Presets */
+        .gradient-scroll { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; max-height: 200px; overflow-y: auto; }
+        .grad-orb {
+            aspect-ratio: 1; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: 0.2s;
+        }
+        .grad-orb:hover { transform: scale(1.1); }
+        .grad-orb.active { border-color: white; }
+
+        /* CTA */
+        .btn-primary {
+            width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 8px;
+            font-weight: 600; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .btn-secondary {
+            width: 100%; padding: 10px; background: transparent; border: 1px dashed var(--border); color: #888;
+            border-radius: 8px; cursor: pointer; margin-bottom: 15px; transition: 0.2s;
+        }
+        .btn-secondary:hover { border-color: #fff; color: #fff; background: rgba(255,255,255,0.05); }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <!-- Canvas Side -->
+        <main class="canvas-section">
+            <div class="top-bar">
+                <button class="icon-btn active" onclick="resizeCanvas(500, 500, this)"><i class="fa-regular fa-square"></i></button>
+                <button class="icon-btn" onclick="resizeCanvas(400, 500, this)"><i class="fa-solid fa-mobile-screen"></i></button>
+                <button class="icon-btn" onclick="resizeCanvas(600, 337, this)"><i class="fa-solid fa-image"></i></button>
+            </div>
+
+            <div id="art-canvas" onclick="deselectAll(event)">
+                <div class="bg-overlay" id="dim-layer"></div>
+                <div class="frame-layer" id="frame-layer"></div>
+                <!-- Text Layers will be injected here -->
+                <div class="text-layer selected" id="layer-0" style="font-size: 32px; font-weight: 800;">
+                    Design is Future.
+                </div>
+            </div>
+        </main>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('background')">Background</button>
+                <button class="tab-btn" onclick="switchTab('layers')">Layers & Text</button>
+            </div>
+
+            <!-- Tab 1: Background -->
+            <div id="panel-background" class="panel-content active">
+                
+                <div class="control-group">
+                    <div class="label-row"><span>Presets</span></div>
+                    <div class="gradient-scroll" id="grad-grid">
+                        <!-- JS generated gradients -->
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row"><span>Custom Image</span></div>
+                    <button class="btn-secondary" onclick="document.getElementById('bg-upload').click()">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Upload Image
+                    </button>
+                    <input type="file" id="bg-upload" hidden onchange="uploadBg(this)">
+                    
+                    <div class="label-row" style="margin-top:10px;"><span>Dim Overlay</span></div>
+                    <input type="range" min="0" max="90" value="0" oninput="setDim(this.value)">
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row"><span>Frame / Border</span></div>
+                    <input type="range" min="0" max="40" value="0" oninput="setFrame(this.value)">
+                    <div class="grid-2" style="margin-top:8px;">
+                        <button class="btn-option" onclick="setFrameColor('#ffffff')">White</button>
+                        <button class="btn-option" onclick="setFrameColor('#000000')">Black</button>
+                    </div>
+                </div>
+
+                <button class="btn-primary" onclick="downloadArt()"><i class="fa-solid fa-download"></i> Export PNG</button>
+            </div>
+
+            <!-- Tab 2: Layers & Text -->
+            <div id="panel-layers" class="panel-content">
+                
+                <button class="btn-secondary" onclick="addLayer()"><i class="fa-solid fa-plus"></i> Add New Text Layer</button>
+
+                <!-- Contextual Controls: Only visible when a layer is selected -->
+                <div id="text-controls" style="opacity: 1; transition: 0.3s;">
+                    
+                    <div class="control-group">
+                        <textarea id="inp-text" rows="2" oninput="updateActive('text', this.value)">Design is Future.</textarea>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="label-row"><span>Font Family</span></div>
+                        <div class="grid-2">
+                            <button class="btn-option" onclick="updateActive('font', 'Inter')">Inter</button>
+                            <button class="btn-option" onclick="updateActive('font', 'Playfair Display')">Serif</button>
+                            <button class="btn-option" onclick="updateActive('font', 'Bebas Neue')">Bebas</button>
+                            <button class="btn-option" onclick="updateActive('font', 'Righteous')">Techno</button>
+                            <button class="btn-option" onclick="updateActive('font', 'Abril Fatface')">Fatface</button>
+                            <button class="btn-option" onclick="updateActive('font', 'Cinzel')">Cinzel</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="label-row"><span>Size & Weight</span></div>
+                        <input type="range" min="12" max="100" id="inp-size" oninput="updateActive('size', this.value)">
+                        <div class="grid-3" style="margin-top:10px;">
+                            <button class="btn-option" onclick="updateActive('weight', '300')">Light</button>
+                            <button class="btn-option" onclick="updateActive('weight', '400')">Reg</button>
+                            <button class="btn-option" onclick="updateActive('weight', '900')">Bold</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="label-row"><span>Color</span></div>
+                        <input type="color" id="inp-color" value="#ffffff" style="width:100%; height:30px; border:none;" oninput="updateActive('color', this.value)">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="label-row"><span>Effects</span></div>
+                        <div class="grid-2">
+                            <button class="btn-option" onclick="toggleGlass()">Glass Box</button>
+                            <button class="btn-option" onclick="toggleShadow()">Glow</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="label-row"><span>Blend Mode</span></div>
+                        <div class="grid-3">
+                            <button class="btn-option" onclick="updateActive('blend', 'normal')">Normal</button>
+                            <button class="btn-option" onclick="updateActive('blend', 'overlay')">Overlay</button>
+                            <button class="btn-option" onclick="updateActive('blend', 'difference')">Diff</button>
+                        </div>
+                    </div>
+                    
+                    <button class="btn-secondary" style="border-color: #ef4444; color: #ef4444;" onclick="deleteActiveLayer()">Delete Layer</button>
+
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <script>
+        // --- State Management ---
+        let activeLayer = document.getElementById('layer-0');
+        const canvas = document.getElementById('art-canvas');
+        
+        // --- Initialization ---
+        window.onload = () => {
+            initGradients();
+            makeDraggable(activeLayer);
+            syncControls(activeLayer);
+        };
+
+        // --- 1. Gradient System ---
+        const gradients = [
+            "linear-gradient(135deg, #111, #333)",
+            "linear-gradient(to right, #4facfe 0%, #00f2fe 100%)",
+            "linear-gradient(to top, #30cfd0 0%, #330867 100%)",
+            "linear-gradient(to right, #b8cbb8 0%, #b8cbb8 0%, #b465da 0%, #cf6cc9 33%, #ee609c 66%, #ee609c 100%)",
+            "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            "linear-gradient(135deg, #000000, #434343)", // Dark
+            "linear-gradient(to top, #fbc2eb 0%, #a6c1ee 100%)",
+            "linear-gradient(120deg, #f6d365 0%, #fda085 100%)",
+            "linear-gradient(to top, #5f72bd 0%, #9b23ea 100%)",
+            "linear-gradient(to top, #c471f5 0%, #fa71cd 100%)",
+            "linear-gradient(to top, #09203f 0%, #537895 100%)",
+            "linear-gradient(to right, #43e97b 0%, #38f9d7 100%)"
+        ];
+
+        function initGradients() {
+            const grid = document.getElementById('grad-grid');
+            gradients.forEach(grad => {
+                const orb = document.createElement('div');
+                orb.className = 'grad-orb';
+                orb.style.background = grad;
+                orb.onclick = () => {
+                    canvas.style.backgroundImage = grad;
+                    // Reset orb borders
+                    document.querySelectorAll('.grad-orb').forEach(o => o.classList.remove('active'));
+                    orb.classList.add('active');
+                };
+                grid.appendChild(orb);
+            });
+            // Set default
+            canvas.style.backgroundImage = gradients[5];
+        }
+
+        // --- 2. Canvas & Frame Logic ---
+        function resizeCanvas(w, h, btn) {
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function uploadBg(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = e => canvas.style.backgroundImage = `url(${e.target.result})`;
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function setDim(val) { document.getElementById('dim-layer').style.backgroundColor = `rgba(0,0,0,${val/100})`; }
+        
+        function setFrame(val) { document.getElementById('frame-layer').style.borderWidth = val + 'px'; }
+        
+        function setFrameColor(color) { document.getElementById('frame-layer').style.borderColor = color; }
+
+
+        // --- 3. Layer Management ---
+        function addLayer() {
+            const newDiv = document.createElement('div');
+            newDiv.className = 'text-layer selected';
+            newDiv.innerText = "New Text";
+            newDiv.style.fontSize = "24px";
+            newDiv.style.color = "#ffffff";
+            newDiv.style.top = "50%";
+            newDiv.style.left = "50%";
+            
+            canvas.appendChild(newDiv);
+            makeDraggable(newDiv);
+            selectLayer(newDiv);
+        }
+
+        function deleteActiveLayer() {
+            if(activeLayer) {
+                activeLayer.remove();
+                activeLayer = null;
+                document.getElementById('text-controls').style.opacity = '0.3';
+                document.getElementById('text-controls').style.pointerEvents = 'none';
+            }
+        }
+
+        function selectLayer(el) {
+            // Deselect others
+            document.querySelectorAll('.text-layer').forEach(l => l.classList.remove('selected'));
+            
+            activeLayer = el;
+            activeLayer.classList.add('selected');
+            
+            // Enable Controls
+            const controls = document.getElementById('text-controls');
+            controls.style.opacity = '1';
+            controls.style.pointerEvents = 'all';
+
+            syncControls(el);
+            // Auto switch to Layers tab if not there
+            switchTab('layers');
+        }
+
+        function deselectAll(e) {
+            if(e.target.id === 'art-canvas' || e.target.classList.contains('bg-overlay')) {
+                document.querySelectorAll('.text-layer').forEach(l => l.classList.remove('selected'));
+                activeLayer = null;
+                document.getElementById('text-controls').style.opacity = '0.3';
+                document.getElementById('text-controls').style.pointerEvents = 'none';
+            }
+        }
+
+        function syncControls(el) {
+            // Populate inputs with current element values
+            document.getElementById('inp-text').value = el.innerText;
+            document.getElementById('inp-size').value = parseInt(window.getComputedStyle(el).fontSize);
+            // document.getElementById('inp-color').value = rgbToHex(window.getComputedStyle(el).color); 
+            // Note: Color sync is tricky with computed styles, skipping for brevity in this snippet
+        }
+
+        // --- 4. Modification Logic ---
+        function updateActive(prop, val) {
+            if(!activeLayer) return;
+
+            if(prop === 'text') activeLayer.innerText = val;
+            if(prop === 'font') activeLayer.style.fontFamily = val;
+            if(prop === 'size') activeLayer.style.fontSize = val + 'px';
+            if(prop === 'weight') activeLayer.style.fontWeight = val;
+            if(prop === 'color') activeLayer.style.color = val;
+            if(prop === 'blend') activeLayer.style.mixBlendMode = val;
+        }
+
+        function toggleGlass() {
+            if(activeLayer) activeLayer.classList.toggle('glass-mode');
+        }
+
+        function toggleShadow() {
+            if(!activeLayer) return;
+            if(activeLayer.style.textShadow) {
+                activeLayer.style.textShadow = "";
+            } else {
+                activeLayer.style.textShadow = "0 0 20px rgba(255,255,255,0.8), 0 0 40px var(--accent)";
+            }
+        }
+
+
+        // --- 5. Dragging Logic ---
+        function makeDraggable(el) {
+            el.addEventListener('mousedown', startDrag);
+            
+            // Allow clicking to select without dragging
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectLayer(el);
+            });
+        }
+
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+
+        function startDrag(e) {
+            if(e.target !== activeLayer) selectLayer(e.target);
+            
+            isDragging = true;
+            const rect = activeLayer.getBoundingClientRect();
+            // Calculate offset from center of element to cursor
+            dragOffset.x = e.clientX - rect.left - (rect.width/2);
+            dragOffset.y = e.clientY - rect.top - (rect.height/2);
+
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', endDrag);
+        }
+
+        function onDrag(e) {
+            if(!isDragging || !activeLayer) return;
+            e.preventDefault();
+            
+            // We need to calculate position relative to canvas
+            const canvasRect = canvas.getBoundingClientRect();
+            
+            let newX = e.clientX - canvasRect.left - dragOffset.x;
+            let newY = e.clientY - canvasRect.top - dragOffset.y;
+
+            // Convert to Percentage to keep position relative on resize
+            let perX = (newX / canvasRect.width) * 100;
+            let perY = (newY / canvasRect.height) * 100;
+
+            activeLayer.style.left = perX + "%";
+            activeLayer.style.top = perY + "%";
+        }
+
+        function endDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', endDrag);
+        }
+
+        // --- 6. Utility: Tab Switching ---
+        function switchTab(tabName) {
+            // Buttons
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-btn')[tabName === 'background' ? 0 : 1].classList.add('active');
+            
+            // Content
+            document.querySelectorAll('.panel-content').forEach(p => p.classList.remove('active'));
+            document.getElementById(`panel-${tabName}`).classList.add('active');
+        }
+
+        // --- 7. Export ---
+        function downloadArt() {
+            // Remove selection border before print
+            if(activeLayer) activeLayer.classList.remove('selected');
+
+            html2canvas(canvas, { scale: 3, useCORS: true, backgroundColor: null }).then(c => {
+                const link = document.createElement('a');
+                link.download = `glass-art-${Date.now()}.png`;
+                link.href = c.toDataURL();
+                link.click();
+
+                // Restore selection
+                if(activeLayer) activeLayer.classList.add('selected');
+            });
+        }
+
+    </script>
+</body>
+</html>
